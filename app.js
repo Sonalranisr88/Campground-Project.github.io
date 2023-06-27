@@ -1,52 +1,52 @@
 var express = require("express"),
     app = express(),
     bodyParser = require("body-parser"),
-    mongoose = require("mongoose")
+    mongoose = require("mongoose"),
+    flash = require("connect-flash"),
+    passport = require("passport"),
+    LocalStrategy = require("passport-local"),
+    methodOverride = require("method-override"),
+    Campground = require("./models/campground"),
+    Comment = require("./models/comment"),
+    User = require("./models/user"),
+    seedDB   = require("./seeds")
+    
+var commentRoutes = require("./routes/comments"),
+    campgroundRoutes = require("./routes/campgrounds"),
+    indexRoutes = require("./routes/index")
 
 mongoose.connect("mongodb://127.0.0.1:27017/yelp_camp",
  { useUnifiedTopology: true, useNewUrlParser: true })
-
 app.use(bodyParser.urlencoded({extended:true})); 
 app.set("view engine" ,"ejs");
+app.use(express.static(__dirname + "/public"));
+app.use(methodOverride("_method"));
+app.use(flash());
+// seedDB();
 
-var campgroundSchema =new mongoose.Schema({
-    name: String,
-    image:String,
-    description:String
+app.use(require("express-session")({
+    secret:"Dugu is the cutuest dog in the world",
+    resave:false,
+    saveUninitialized:false
+}));
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+passport.use(new LocalStrategy(User.authenticate()));
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
+
+app.use(function(req,res,next){
+    res.locals.currentUser = req.user;
+    res.locals.error = req.flash("error");
+    res.locals.success= req.flash("success");
+    next();
 });
 
-var Campground = mongoose.model("Campground",campgroundSchema);
-
-app.get("/",function(req, res){
-    res.render("landing");
-});
-
-app.get("/campgrounds", async function(req, res) {
-    var campgrounds = await Campground.find({});
-    res.render("index", {campgrounds:campgrounds});
-}); 
-
-app.post("/campgrounds", async function(req,res){
-        var name = req.body.name;
-        var image = req.body.image;
-        var desc =req.body.description;
-        var newCampground = {name:name, image:image , description:desc};
-
-        var campground = await Campground.create(newCampground);
-        res.redirect("/campgrounds");
-    
-        });
-
-app.get("/campgrounds/new",function(req,res){
-        res.render("new");
-    });
-
-app.get("/campgrounds/:id",async function(req,res){
-
-    var foundCampground = await Campground.findById(req.params.id);
-    res.render("show",{campground:foundCampground});
-      
-});
+app.use("/",indexRoutes);
+app.use("/campgrounds/:id/comments",commentRoutes);
+app.use("/campgrounds",campgroundRoutes);
 
 app.listen(3000,function(){
     console.log("The server started");
